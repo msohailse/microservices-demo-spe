@@ -51,18 +51,23 @@ spec:
           value: "redis-cart:6379"
         resources:
           requests:
-            cpu: 200m
-            memory: 64Mi
-          limits:
             cpu: 300m
             memory: 128Mi
+          limits:
+            # No CPU limit: .NET JIT on startup is CPU-heavy and a low cap
+            # throttles it so the gRPC health probe can't respond in time.
+            memory: 256Mi
         readinessProbe:
           initialDelaySeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7070
         livenessProbe:
-          initialDelaySeconds: 15
+          initialDelaySeconds: 60
           periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7070
 ---

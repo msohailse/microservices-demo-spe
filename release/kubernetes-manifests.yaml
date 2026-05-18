@@ -59,18 +59,26 @@ spec:
         - name: DISABLE_PROFILER
           value: "1"
         readinessProbe:
+          initialDelaySeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7000
         livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7000
         resources:
           requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
-            cpu: 200m
+            cpu: 150m
             memory: 128Mi
+          limits:
+            # No CPU limit: Node single-threaded event loop must answer the
+            # gRPC health probe; a low CPU cap under load causes liveness kills.
+            memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
@@ -219,9 +227,16 @@ spec:
         - name: DISABLE_PROFILER
           value: "1"
         readinessProbe:
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 3550
         livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 3550
         resources:
@@ -286,9 +301,16 @@ spec:
           ports:
           - containerPort: 5050
           readinessProbe:
+            initialDelaySeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
             grpc:
               port: 5050
           livenessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
             grpc:
               port: 5050
           env:
@@ -373,10 +395,17 @@ spec:
         - name: DISABLE_PROFILER
           value: "1"
         readinessProbe:
+          initialDelaySeconds: 15
           periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 50051
         livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 50051
         resources:
@@ -446,18 +475,23 @@ spec:
           value: "redis-cart:6379"
         resources:
           requests:
-            cpu: 200m
-            memory: 64Mi
-          limits:
             cpu: 300m
             memory: 128Mi
+          limits:
+            # No CPU limit: .NET JIT on startup is CPU-heavy and a low cap
+            # throttles it so the gRPC health probe can't respond in time.
+            memory: 256Mi
         readinessProbe:
           initialDelaySeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7070
         livenessProbe:
-          initialDelaySeconds: 15
+          initialDelaySeconds: 60
           periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7070
 ---
@@ -590,11 +624,17 @@ spec:
         - name: DISABLE_PROFILER
           value: "1"
         readinessProbe:
+          initialDelaySeconds: 15
           periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 8080
         livenessProbe:
-          periodSeconds: 5
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 8080
         resources:
@@ -665,18 +705,26 @@ spec:
         - name: DISABLE_PROFILER
           value: "1"
         readinessProbe:
+          initialDelaySeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 50051
         livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 50051
         resources:
           requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
-            cpu: 200m
+            cpu: 150m
             memory: 128Mi
+          limits:
+            # No CPU limit: Node single-threaded event loop must answer the
+            # gRPC health probe; a low CPU cap under load causes liveness kills.
+            memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
@@ -734,7 +782,9 @@ spec:
           ports:
           - containerPort: 8080
           readinessProbe:
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
             httpGet:
               path: "/_healthz"
               port: 8080
@@ -742,7 +792,10 @@ spec:
               - name: "Cookie"
                 value: "shop_session-id=x-readiness-probe"
           livenessProbe:
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
             httpGet:
               path: "/_healthz"
               port: 8080
@@ -861,11 +914,17 @@ spec:
         ports:
         - containerPort: 8080
         readinessProbe:
+          initialDelaySeconds: 15
           periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 8080
         livenessProbe:
-          periodSeconds: 5
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 8080
         env:
@@ -948,13 +1007,17 @@ spec:
             cpu: 300m
             memory: 300Mi
         readinessProbe:
-          initialDelaySeconds: 20
+          initialDelaySeconds: 15
           periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 9555
         livenessProbe:
-          initialDelaySeconds: 20
+          initialDelaySeconds: 30
           periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 9555
 ---
