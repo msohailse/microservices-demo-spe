@@ -51,10 +51,17 @@ spec:
         - name: DISABLE_PROFILER
           value: "1"
         readinessProbe:
+          initialDelaySeconds: 15
           periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 50051
         livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
           grpc:
             port: 50051
         resources:

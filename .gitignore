@@ -26,3 +26,13 @@ obj/
 pkg/
 release/wi-kubernetes-manifests.yaml
 vendor/
+
+# SPE case-study report -- include main files, exclude build artifacts and info notes
+/report/info/
+/report/*.aux
+/report/*.log
+/report/*.out
+/report/*.toc
+/report/missfont.log
+
+/docs/*

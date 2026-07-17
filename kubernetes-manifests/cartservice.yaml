@@ -51,18 +51,24 @@ spec:
           value: "redis-cart:6379"
         resources:
           requests:
-            cpu: 200m
-            memory: 64Mi
-          limits:
             cpu: 300m
             memory: 128Mi
+          limits:
+            # Increased from upstream 300m: .NET JIT warmup is CPU-heavy;
+            # the original cap throttled startup and caused liveness probe failures.
+            cpu: 600m
+            memory: 256Mi
         readinessProbe:
           initialDelaySeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7070
         livenessProbe:
-          initialDelaySeconds: 15
+          initialDelaySeconds: 60
           periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7070
 ---

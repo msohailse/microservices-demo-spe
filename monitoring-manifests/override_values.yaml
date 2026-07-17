@@ -1,0 +1,20 @@
+grafana:
+  service:
+    type: ClusterIP  # Private internal cluster routing
+
+  additionalDataSources:
+    - name: Jaeger
+      type: jaeger
+      access: proxy
+      url: http://jaeger-query.monitoring.svc.cluster.local:16686
+      isDefault: false
+      jsonData:
+        # This establishes the click-through hyperlink from traces back to Prometheus metrics
+        tracesToLogsV2:
+          datasourceUid: 'prometheus'
+          tags: [{ key: 'service.name' }, { key: 'pod' }]
+
+# Prevent local data storage drives from filling up
+prometheus:
+  prometheusSpec:
+    retention: 6h

@@ -48,7 +48,9 @@ spec:
           ports:
           - containerPort: 8080
           readinessProbe:
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
             httpGet:
               path: "/_healthz"
               port: 8080
@@ -56,7 +58,10 @@ spec:
               - name: "Cookie"
                 value: "shop_session-id=x-readiness-probe"
           livenessProbe:
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
             httpGet:
               path: "/_healthz"
               port: 8080

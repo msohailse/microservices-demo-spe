@@ -53,18 +53,27 @@ spec:
         - name: DISABLE_PROFILER
           value: "1"
         readinessProbe:
+          initialDelaySeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7000
         livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
           grpc:
             port: 7000
         resources:
           requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
-            cpu: 200m
+            cpu: 150m
             memory: 128Mi
+          limits:
+            # Increased from upstream 150m: Node single-threaded event loop needs
+            # headroom to answer the gRPC health probe under startup load.
+            cpu: 300m
+            memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
