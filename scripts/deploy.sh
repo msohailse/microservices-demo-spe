@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Runs the full local pipeline in order: monitoring/tracing infra first (so
-# Istio sidecars get injected as soon as the app starts), then the app, then
-# the Istio routing that exposes it. Run from the repo root.
+# Full deployment pipeline for the SPE benchmark on Minikube. Run from repo root.
 #
-# Order matters:
-#   1. monitoring-setup.sh enables Istio + injection on 'default' before any
-#      app pod exists, and stands up Prometheus/Grafana.
-#   2. jaeger.yaml gives the Envoy sidecars somewhere to send spans, and
-#      Prometheus something to scrape, before the app starts talking.
-#   3. kubernetes-manifests.yaml deploys the ~11 services (sidecars injected
-#      on creation since injection is already enabled).
-#   4. istio-manifests.yaml opens the Gateway/HTTPRoute to the frontend.
+# What this does, in plain terms:
+#   1. Starts Minikube if it is not already running.
+#   2. Installs Prometheus and Grafana (for metrics), enables Istio (the service
+#      mesh that wraps each pod in a proxy so we can measure traffic without
+#      touching any app code), and registers Jaeger as the tracing destination.
+#   3. Deploys Jaeger (distributed trace collector) and tells Istio to send
+#      every request trace to it at 100% sampling.
+#   4. Deploys the 11 Online Boutique microservices. Because Istio is already
+#      enabled, each pod gets a sidecar proxy injected automatically on startup.
+#   5. Opens the frontend to browser traffic via an Istio Gateway.
 
 set -euo pipefail
 
@@ -31,11 +31,19 @@ echo ">> [3/5] Jaeger + Istio telemetry wiring"
 kubectl apply -f monitoring-manifests/monitoring.yaml
 
 echo ">> Setting Istio trace sampling to 100% and pointing to Jaeger"
-kubectl patch configmap istio -n istio-system --type merge -p '{
-  "data": {
-    "mesh": "defaultConfig:\n  discoveryAddress: istiod.istio-system.svc:15012\n  tracing:\n    zipkin:\n      address: jaeger-collector.monitoring.svc.cluster.local:9411\n    sampling: 100.0\ndefaultProviders:\n  metrics:\n  - prometheus\n  tracing:\n  - zipkin\nenablePrometheusMerge: true\nrootNamespace: istio-system\ntrustDomain: cluster.local"
-  }
-}'
+# monitoring-setup.sh already adds the extensionProvider; this patch only
+# merges sampling/tracing fields without touching extensionProviders.
+MESH_PATCH=$(kubectl get configmap istio -n istio-system -o jsonpath='{.data.mesh}' | python3 -c '
+import json, sys, yaml
+mesh = yaml.safe_load(sys.stdin) or {}
+mesh.setdefault("defaultConfig", {}).setdefault("tracing", {}).update({
+    "zipkin": {"address": "jaeger-collector.monitoring.svc.cluster.local:9411"},
+    "sampling": 100.0,
+})
+mesh.setdefault("defaultProviders", {}).update({"metrics": ["prometheus"], "tracing": ["zipkin"]})
+print(json.dumps({"data": {"mesh": yaml.dump(mesh, default_flow_style=False)}}))
+')
+kubectl patch configmap istio -n istio-system --type merge -p "${MESH_PATCH}"
 
 echo ">> [4/5] Online Boutique microservices"
 kubectl apply -f release/kubernetes-manifests.yaml

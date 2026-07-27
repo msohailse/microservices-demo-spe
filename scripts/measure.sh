@@ -101,65 +101,63 @@ for r in results:
     if svc and svc != "unknown":
         measured[svc] = float(r["value"][1])   # milliseconds
 
-if root_calls == 0:
-    print("  [WARNING] No Jaeger dependency data — corrections cannot be applied.")
-    print("            Make sure BOTH port-forwards are running before running this script:")
-    print("            kubectl port-forward -n monitoring svc/jaeger-query 16686:16686")
-    print("            kubectl port-forward -n monitoring svc/monitoring-kube-prometheus-prometheus 9090:9090")
-    print()
-
-services   = set(measured.keys())
-downstream = {s: set(outbound[s].keys()) & services for s in services}
-
-# total calls RECEIVED by each service (sum of all inbound edges)
-total_incoming = defaultdict(int)
-for parent, children in outbound.items():
-    for child, n in children.items():
-        total_incoming[child] += n
-
-# fan-out: calls from s to c per CALL TO s (not per root request)
-fan_out = defaultdict(lambda: defaultdict(float))
-for parent, children in outbound.items():
-    denom = total_incoming[parent]
-    if denom == 0:
-        continue
-    for child, n in children.items():
-        fan_out[parent][child] = n / denom
-
-# Topological sort: leaves first
-order, remaining = [], set(services)
-while remaining:
-    leaves = [s for s in remaining if all(c in order for c in downstream[s])]
-    if not leaves:
-        leaves = sorted(remaining)
-    for s in sorted(leaves):
-        order.append(s)
-        remaining.discard(s)
-
-# Correct service times
-S_net = {}
-for s in order:
-    correction = sum(
-        fan_out[s].get(c, 0.0) * S_net.get(c, measured.get(c, 0.0))
-        for c in downstream[s]
-    )
-    S_net[s] = max(measured.get(s, 0.0) - correction, 0.0)
-
 print()
 print(f"  Root calls (loadgenerator->frontend): {root_calls}")
-print(f"  lambda_frontend: {lam:.4f} req/s")
-print()
-print(f"  {'Station':<28} {'Residence time':<18} {'Service time':<16} {'Service rate':<14} {'Note'}")
-print(f"  {'(what Prometheus sees)':<28} {'incl. downstream (ms)':<18} {'JMT input (ms)':<16} {'mu = 1/S (1/s)':<14}")
-print(f"  {'-'*90}")
-ia = (1/lam)*1000 if lam > 0 else 0
-print(f"  {'loadgenerator (source)':<28} {'-':<18} {ia:<16.3f} {lam:<14.4f}")
-for s in sorted(S_net, key=lambda x: -S_net[x]):
-    sm = measured.get(s, 0.0)
-    sn = S_net[s]
-    mu = 1000.0 / sn if sn > 0 else 0.0
-    flag = "downstream wait subtracted" if abs(sm - sn) > 0.5 else "leaf -- no change"
-    print(f"  {s:<28} {sm:<18.3f} {sn:<16.3f} {mu:<14.2f} {flag}")
+print(f"  lambda (λ) frontend: {lam:.4f} req/s")
+
+if root_calls == 0:
+    print()
+    print("  [WARNING] No Jaeger dependency data — S_i corrections cannot be applied.")
+    print("            JMT input table skipped: S_i = R_i would be wrong for non-leaf services.")
+    print("            Make sure BOTH port-forwards are running and load has accumulated traces:")
+    print("            kubectl port-forward -n monitoring svc/jaeger-query 16686:16686")
+    print("            kubectl port-forward -n monitoring svc/monitoring-kube-prometheus-prometheus 9090:9090")
+else:
+    services   = set(measured.keys())
+    downstream = {s: set(outbound[s].keys()) & services for s in services}
+
+    total_incoming = defaultdict(int)
+    for parent, children in outbound.items():
+        for child, n in children.items():
+            total_incoming[child] += n
+
+    # V_i = total_incoming[s] / root_calls  (visit ratio: avg calls to s per root request)
+    fan_out = defaultdict(lambda: defaultdict(float))
+    for parent, children in outbound.items():
+        denom = total_incoming[parent]
+        if denom == 0:
+            continue
+        for child, n in children.items():
+            fan_out[parent][child] = n / denom
+
+    order, remaining = [], set(services)
+    while remaining:
+        leaves = [s for s in remaining if all(c in order for c in downstream[s])]
+        if not leaves:
+            leaves = sorted(remaining)
+        for s in sorted(leaves):
+            order.append(s)
+            remaining.discard(s)
+
+    S_net = {}
+    for s in order:
+        correction = sum(
+            fan_out[s].get(c, 0.0) * S_net.get(c, measured.get(c, 0.0))
+            for c in downstream[s]
+        )
+        S_net[s] = max(measured.get(s, 0.0) - correction, 0.0)
+
+    print()
+    print(f"  {'Station':<28} {'R_i (ms)':<18} {'S_i (ms)':<16} {'S_i (s) -> JMT':<18} {'Note'}")
+    print(f"  {'(Prometheus R_i)':<28} {'raw residence time':<18} {'S_i=R_i-W_i':<16}")
+    print(f"  {'-'*90}")
+    ia = (1/lam)*1000 if lam > 0 else 0
+    print(f"  {'loadgenerator (source)':<28} {'-':<18} {ia:<16.3f} {ia/1000:<18.6f}")
+    for s in sorted(S_net, key=lambda x: -S_net[x]):
+        sm = measured.get(s, 0.0)
+        sn = S_net[s]
+        flag = "W_i subtracted" if abs(sm - sn) > 0.5 else "leaf: S_i = R_i"
+        print(f"  {s:<28} {sm:<18.3f} {sn:<16.3f} {sn/1000:<18.6f} {flag}")
 
 # ── Section 3: p95 latency per service ───────────────────────────────────────
 print()
@@ -194,7 +192,7 @@ else:
     print()
     print(f"  System p95 (frontend end-to-end): {sys_p95:.1f} ms")
     print()
-    print(f"  {'Station':<28} {'mean R (ms)':<16} {'p95 R (ms)':<14} {'p95/mean ratio'}")
+    print(f"  {'Station':<28} {'R_i (ms)':<16} {'p95 (ms)':<14} {'p95/R_i ratio'}")
     print(f"  {'-'*70}")
     for s in sorted(measured, key=lambda x: -measured.get(x, 0)):
         mn  = measured.get(s, 0.0)
